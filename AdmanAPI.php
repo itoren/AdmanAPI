@@ -52,7 +52,103 @@ class AdmanAPI
         return $result;
     }
 
-    // Существующие методы...
+    // Базовые методы
+
+    /**
+     * Получить баланс аккаунта.
+     *
+     * @return float Баланс аккаунта
+     */
+    public function getBalance(): float
+    {
+        $response = $this->sendRequest('account/balance');
+        return (float)$response['balance'];
+    }
+
+    /**
+     * Получить список тарифов.
+     *
+     * @param int|null $groupId Тип услуги (0 - все, 2 - VPS, 3 - Сервера, 4 - SSL, 5 - Хостинг)
+     * @param int|null $tarifId Конкретный тариф
+     * @return array Список тарифов
+     */
+    public function getTariffs(?int $groupId = null, ?int $tarifId = null): array
+    {
+        $params = [];
+        if ($groupId !== null) {
+            $params['filter']['group_id'] = $groupId;
+        }
+        if ($tarifId !== null) {
+            $params['filter']['tarif_id'] = $tarifId;
+        }
+
+        $response = $this->sendRequest('order/tarifs', $params);
+        return $response['data'] ?? [];
+    }
+
+    /**
+     * Получить список имен параметров дополнительных услуг.
+     *
+     * @return array Список имен параметров
+     */
+    public function getAdditionalServiceNames(): array
+    {
+        return $this->sendRequest('order/names')['data'] ?? [];
+    }
+
+    /**
+     * Получить список операционных систем для тарифа.
+     *
+     * @param int $tarifId Номер тарифа
+     * @return array Список операционных систем
+     */
+    public function getOperatingSystems(int $tarifId): array
+    {
+        return $this->sendRequest('order/os', ['tarif_id' => $tarifId])['data'] ?? [];
+    }
+
+    /**
+     * Создать новый заказ.
+     *
+     * @param int $tarif Номер тарифа
+     * @param int $period Период оплаты (1 - месяц, 2 - два месяца и т.д.)
+     * @param array $options Дополнительные параметры заказа
+     * @return int Номер заказа
+     */
+    public function createOrder(int $tarif, int $period, array $options = []): int
+    {
+        $data = [
+            'tarif' => $tarif,
+            'period' => $period,
+        ];
+        $data = array_merge($data, $options);
+
+        $response = $this->sendRequest('order/add', $data);
+        return (int)$response['id'];
+    }
+
+    /**
+     * Продлить существующий заказ.
+     *
+     * @param int $zakazId Номер заказа
+     * @param int $period Период продления (1 - месяц, 2 - два месяца и т.д.)
+     * @return array Ответ сервера
+     */
+    public function prolongOrder(int $zakazId, int $period): array
+    {
+        return $this->sendRequest('order/prolong', ['zakaz_id' => $zakazId, 'period' => $period]);
+    }
+
+    /**
+     * Получить список заказов.
+     *
+     * @param array $filters Фильтры для списка заказов
+     * @return array Список заказов
+     */
+    public function getOrderList(array $filters = []): array
+    {
+        return $this->sendRequest('order/list', ['filter' => $filters])['data'] ?? [];
+    }
 
     /**
      * Получить информацию о заказе.
@@ -77,90 +173,149 @@ class AdmanAPI
     }
 
     /**
-     * Перезагрузить сервер.
+     * Перезагрузить виртуальный сервер.
      *
      * @param int $zakazId Номер заказа
      * @return array Ответ сервера
      */
-    public function rebootServer(int $zakazId): array
+    public function rebootVPS(int $zakazId): array
     {
-        return $this->sendRequest('order/reboot', ['zakaz_id' => $zakazId]);
+        return $this->sendRequest('order/vpsreboot', ['zakaz_id' => $zakazId]);
     }
 
     /**
-     * Выключить сервер.
+     * Получить нагрузку на виртуальные серверы.
      *
-     * @param int $zakazId Номер заказа
+     * @return array Нагрузка на серверы
+     */
+    public function getVPSServersLoad(): array
+    {
+        return $this->sendRequest('order/vpsload')['vpsload'] ?? [];
+    }
+
+    // Методы для работы с доменами
+
+    /**
+     * Получить список доменов.
+     *
+     * @param array $filters Фильтры для списка доменов
+     * @return array Список доменов
+     */
+    public function getDomainList(array $filters = []): array
+    {
+        return $this->sendRequest('domain/list', ['filter' => $filters])['data'] ?? [];
+    }
+
+    /**
+     * Продлить домен.
+     *
+     * @param int $domainId Номер домена
+     * @param int $period Период продления (1 - год, ... до 10 лет)
      * @return array Ответ сервера
      */
-    public function shutdownServer(int $zakazId): array
+    public function prolongDomain(int $domainId, int $period): array
     {
-        return $this->sendRequest('order/shutdown', ['zakaz_id' => $zakazId]);
+        return $this->sendRequest('domain/prolong', ['domain_id' => $domainId, 'period' => $period]);
     }
 
     /**
-     * Включить сервер.
+     * Проверить доступность домена для регистрации.
      *
-     * @param int $zakazId Номер заказа
+     * @param string $domain Домен без зоны
+     * @param array $zones Зоны для проверки (например: ['.ru' => 1, '.com' => 1])
+     * @return array Результат проверки
+     */
+    public function checkDomainAvailability(string $domain, array $zones): array
+    {
+        return $this->sendRequest('domain/check', ['domain' => $domain, 'zn' => $zones])['domains'] ?? [];
+    }
+
+    /**
+     * Зарегистрировать домен.
+     *
+     * @param string $domain Домен
+     * @param int $profileId Номер профиля
      * @return array Ответ сервера
      */
-    public function startServer(int $zakazId): array
+    public function registerDomain(string $domain, int $profileId): array
     {
-        return $this->sendRequest('order/start', ['zakaz_id' => $zakazId]);
+        return $this->sendRequest('domain/add', ['domain' => $domain, 'profile_id' => $profileId]);
+    }
+
+    // Методы для работы с DNS
+
+    /**
+     * Получить список DNS-зон для домена.
+     *
+     * @param int $domainId Номер домена
+     * @return array Список DNS-зон
+     */
+    public function getDNSZoneList(int $domainId): array
+    {
+        return $this->sendRequest('domain/zonelist', ['filter' => ['domain_id' => $domainId]])['data'] ?? [];
     }
 
     /**
-     * Изменить операционную систему на сервере.
+     * Добавить запись DNS в зону домена.
      *
-     * @param int $zakazId Номер заказа
-     * @param int $osId ID новой операционной системы
+     * @param int $domainId Номер домена
+     * @param string $type Тип записи (A, TXT, MX, CNAME)
+     * @param string $subdomain Поддомен
+     * @param string $rec Значение записи
+     * @param int|null $prior Приоритет (для MX)
      * @return array Ответ сервера
      */
-    public function changeOperatingSystem(int $zakazId, int $osId): array
+    public function addDNSRecord(int $domainId, string $type, string $subdomain, string $rec, ?int $prior = null): array
     {
-        return $this->sendRequest('order/os_change', ['zakaz_id' => $zakazId, 'os_id' => $osId]);
+        return $this->sendRequest('domain/zoneadd', [
+            'domain_id' => $domainId,
+            'type' => $type,
+            'subdomain' => $subdomain,
+            'rec' => $rec,
+            'prior' => $prior,
+        ]);
     }
 
     /**
-     * Получить список доступных действий для заказа.
+     * Удалить запись DNS из зоны домена.
      *
-     * @param int $zakazId Номер заказа
-     * @return array Список действий
+     * @param int $domainId Номер домена
+     * @param int $recId Номер записи
+     * @return array Ответ сервера
      */
-    public function getOrderActions(int $zakazId): array
+    public function deleteDNSRecord(int $domainId, int $recId): array
     {
-        return $this->sendRequest('order/actions', ['zakaz_id' => $zakazId]);
+        return $this->sendRequest('domain/zonedelete', ['domain_id' => $domainId, 'rec_id' => $recId]);
+    }
+
+    // Методы для работы с тикетами
+
+    /**
+     * Получить список тикетов.
+     *
+     * @param array $filters Фильтры для списка тикетов
+     * @return array Список тикетов
+     */
+    public function getTicketList(array $filters = []): array
+    {
+        return $this->sendRequest('ticket/list', ['filter' => $filters])['data'] ?? [];
     }
 
     /**
-     * Получить статусы заказов.
+     * Создать новый тикет или ответить в существующий.
      *
-     * @return array Список статусов
+     * @param string $subject Тема сообщения
+     * @param string $text Сообщение
+     * @param int|null $ticketId Номер тикета (если ответ на существующий)
+     * @return array Ответ сервера
      */
-    public function getOrderStatuses(): array
+    public function createOrUpdateTicket(string $subject, string $text, ?int $ticketId = null): array
     {
-        return $this->sendRequest('order/statuses');
-    }
-
-    /**
-     * Получить историю платежей.
-     *
-     * @param array $filters Фильтры для списка платежей
-     * @return array Список платежей
-     */
-    public function getPaymentHistory(array $filters = []): array
-    {
-        return $this->sendRequest('account/payments', ['filter' => $filters]);
-    }
-
-    /**
-     * Получить информацию об аккаунте.
-     *
-     * @return array Информация об аккаунте
-     */
-    public function getAccountInfo(): array
-    {
-        return $this->sendRequest('account/info');
+        return $this->sendRequest('ticket/add', [
+            'subject' => $subject,
+            'text' => $text,
+            'ticket_id' => $ticketId,
+        ]);
     }
 }
 
@@ -168,21 +323,16 @@ class AdmanAPI
 try {
     $api = new AdmanAPI('test@mail.com', 'qwert12345');
 
-    // Получить информацию о заказе
-    $orderInfo = $api->getOrderInfo(12345);
-    print_r($orderInfo);
+    // Получить баланс
+    echo "Баланс: " . $api->getBalance() . "\n";
 
-    // Перезагрузить сервер
-    $rebootResult = $api->rebootServer(12345);
-    print_r($rebootResult);
+    // Получить список тарифов
+    $tariffs = $api->getTariffs(2); // Например, получить тарифы для VPS
+    print_r($tariffs);
 
-    // Получить историю платежей
-    $payments = $api->getPaymentHistory();
-    print_r($payments);
-
-    // Получить информацию об аккаунте
-    $accountInfo = $api->getAccountInfo();
-    print_r($accountInfo);
+    // Создать заказ
+    $orderId = $api->createOrder(1, 1, ['os' => 1]); // Например, создать заказ на VPS с ОС #1
+    echo "Новый заказ создан с ID: $orderId\n";
 
 } catch (InvalidArgumentException $e) {
     echo "Ошибка: " . $e->getMessage();
